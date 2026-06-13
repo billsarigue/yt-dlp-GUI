@@ -1,0 +1,1 @@
+// lib.rs vazio — toda a lógica está em main.rs

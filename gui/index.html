@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>yt-dlp GUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ydg-bg: #0d1117;
+    --ydg-bg2: #0f151e;
+    --ydg-panel: #151c27;
+    --ydg-panel2: #18202d;
+    --ydg-border: #232d3d;
+    --ydg-border2: #2d3a50;
+    --ydg-text: #e7ecf4;
+    --ydg-text2: #94a1b5;
+    --ydg-text3: #5d6b80;
+    --ydg-accent: #3b82d6;
+    --ydg-radius: 10px;
+    --ydg-sans: "Geist", "Helvetica Neue", sans-serif;
+    --ydg-mono: "JetBrains Mono", monospace;
+  }
+
+  /* ---------- Janela ---------- */
+  .ydg-win {
+    display: flex; flex-direction: column;
+    background: var(--ydg-bg); color: var(--ydg-text);
+    font-family: var(--ydg-sans); font-size: 14px;
+    border-radius: 10px; overflow: hidden;
+    border: 1px solid #1b2433;
+    width: 100%; height: 100%;
+  }
+  .ydg-tbar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 40px; padding-left: 14px; flex: none;
+    background: var(--ydg-bg2); border-bottom: 1px solid #1b2433;
+    user-select: none;
+  }
+  .ydg-tbar-left { display: flex; align-items: center; gap: 9px; flex: 1; -webkit-app-region: drag; }
+  .ydg-tbar-btns { -webkit-app-region: no-drag; }
+  .ydg-mark {
+    width: 19px; height: 19px; border-radius: 5px;
+    background: var(--ydg-accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ydg-tbar-title { font-size: 13px; font-weight: 550; color: #c6cfdb; letter-spacing: 0.01em; }
+  .ydg-tbar-ver { font-family: var(--ydg-mono); font-size: 10.5px; color: var(--ydg-text3); padding-top: 1px; }
+  .ydg-tbar-btns { display: flex; align-self: stretch; }
+  .ydg-tbtn {
+    width: 44px; display: flex; align-items: center; justify-content: center;
+    color: var(--ydg-text3); cursor: default;
+    background: transparent; border: none; padding: 0;
+    outline: none; font: inherit; -webkit-app-region: no-drag;
+  }
+  .ydg-tbtn:hover { background: #1a2330; color: var(--ydg-text2); }
+  .ydg-tbtn-close:hover { background: #b13a47; color: #fff; }
+  .ydg-body { flex: 1; min-height: 0; padding: 0 40px; display: flex; flex-direction: column; align-items: center; }
+  .ydg-body > * { width: 100%; max-width: 760px; }
+
+  .ydg-center {
+    max-width: 760px; width: 100%; margin: 0 auto;
+    display: flex; flex-direction: column;
+  }
+  .ydg-rel { position: relative; }
+  .ydg-mono { font-family: var(--ydg-mono); }
+
+  /* ---------- Barra de URL ---------- */
+  .ydg-bar {
+    display: flex; align-items: center; height: 52px;
+    background: var(--ydg-panel);
+    border: 1px solid var(--ydg-border);
+    border-radius: var(--ydg-radius);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .ydg-bar:focus-within {
+    border-color: var(--ydg-accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ydg-accent) 22%, transparent);
+  }
+  .ydg-bar.is-error {
+    border-color: #c4516a;
+    box-shadow: 0 0 0 3px rgba(196, 81, 106, 0.18);
+    animation: ydg-shake 0.4s;
+  }
+  @keyframes ydg-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-3px); }
+  }
+  .ydg-bar-icon {
+    display: flex; align-items: center;
+    padding: 0 4px 0 16px; color: var(--ydg-text3);
+  }
+  .ydg-input {
+    flex: 1; min-width: 0; align-self: stretch;
+    background: transparent; border: none; outline: none;
+    color: var(--ydg-text); font-family: var(--ydg-sans); font-size: 14.5px;
+    padding: 0 12px;
+  }
+  .ydg-input::placeholder { color: var(--ydg-text3); }
+  .ydg-input-mono { font-family: var(--ydg-mono); font-size: 13px; }
+  .ydg-fmt-trigger {
+    display: flex; align-items: center; gap: 7px; align-self: stretch;
+    padding: 0 14px; cursor: pointer;
+    background: transparent; border: none;
+    border-left: 1px solid var(--ydg-border);
+    color: var(--ydg-text2); font-family: var(--ydg-sans);
+    font-size: 13.5px; font-weight: 550;
+  }
+  .ydg-fmt-trigger:hover, .ydg-fmt-trigger.is-open { background: var(--ydg-panel2); color: var(--ydg-text); }
+  .ydg-dl-btn {
+    display: flex; align-items: center; gap: 8px; align-self: stretch;
+    padding: 0 20px; margin: -1px -1px -1px 0; cursor: pointer;
+    background: var(--ydg-accent); border: none;
+    border-radius: 0 var(--ydg-radius) var(--ydg-radius) 0;
+    color: #fff; font-family: var(--ydg-sans); font-size: 14px; font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: filter 0.12s;
+  }
+  .ydg-dl-btn:hover { filter: brightness(1.12); }
+  .ydg-dl-btn:active { filter: brightness(0.94); }
+
+  /* ---------- Menus suspensos ---------- */
+  .ydg-menu {
+    position: absolute; z-index: 50;
+    background: #161e2b; border: 1px solid var(--ydg-border2);
+    border-radius: 10px; padding: 5px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+  .ydg-menu-h {
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ydg-text3); padding: 7px 10px 4px;
+  }
+  .ydg-menu-item {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 7px 10px; border: none; border-radius: 7px; cursor: pointer;
+    background: transparent; color: var(--ydg-text2);
+    font-family: var(--ydg-sans); font-size: 13px; text-align: left;
+  }
+  .ydg-menu-item:hover { background: #1d2737; color: var(--ydg-text); }
+  .ydg-menu-item.is-active { color: var(--ydg-text); }
+  .ydg-menu-name { font-weight: 550; min-width: 42px; }
+  .ydg-menu-desc { flex: 1; font-size: 11.5px; color: var(--ydg-text3); }
+
+  /* ---------- Pílula / select de qualidade ---------- */
+  .ydg-pill, .ydg-select {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--ydg-panel); border: 1px solid var(--ydg-border);
+    border-radius: calc(var(--ydg-radius) - 2px);
+    padding: 7px 12px; cursor: pointer;
+    font-family: var(--ydg-sans); font-size: 13px; color: var(--ydg-text);
+  }
+  .ydg-pill:hover, .ydg-select:hover { border-color: var(--ydg-border2); background: var(--ydg-panel2); }
+  .ydg-pill-label { color: var(--ydg-text3); }
+  .ydg-pill-value, .ydg-select-value { font-weight: 550; }
+  .ydg-under-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px;
+  }
+  .ydg-dest {
+    display: flex; align-items: center; gap: 7px;
+    color: var(--ydg-text3); font-size: 12.5px; font-family: var(--ydg-mono);
+  }
+
+  /* ---------- Fila ---------- */
+  .ydg-queue { margin-top: 34px; display: flex; flex-direction: column; min-height: 0; }
+  .ydg-queue-h {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ydg-text3); margin-bottom: 12px;
+  }
+  .ydg-queue-count {
+    font-family: var(--ydg-mono); font-size: 11px; letter-spacing: 0;
+    background: var(--ydg-panel2); border: 1px solid var(--ydg-border);
+    border-radius: 99px; padding: 1px 7px; color: var(--ydg-text2);
+  }
+  .ydg-prog {
+    height: 5px; border-radius: 99px; overflow: hidden;
+    background: #1c2532;
+  }
+  .ydg-prog-fill {
+    height: 100%; border-radius: 99px;
+    background: var(--ydg-accent);
+    transition: width 0.35s linear;
+  }
+  .ydg-prog-fill.is-done { opacity: 0.4; }
+  .ydg-pct { font-family: var(--ydg-mono); font-size: 12px; color: var(--ydg-text2); }
+  .ydg-icon-btn {
+    width: 24px; height: 24px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; border-radius: 6px; cursor: pointer;
+    color: var(--ydg-text3);
+  }
+  .ydg-icon-btn:hover { background: #222d3e; color: var(--ydg-text); }
+  .ydg-badge {
+    font-family: var(--ydg-mono); font-size: 10px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    background: color-mix(in oklab, var(--ydg-accent) 16%, transparent);
+    color: color-mix(in oklab, var(--ydg-accent) 75%, #fff);
+    border-radius: 4px; padding: 2px 6px;
+  }
+
+  /* Variação A — cartões */
+  .ydg-cards { display: flex; flex-direction: column; gap: 10px; }
+  .ydg-card {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--ydg-panel); border: 1px solid var(--ydg-border);
+    border-radius: var(--ydg-radius); padding: 12px 14px;
+  }
+  .ydg-thumb {
+    width: 86px; height: 48px; flex: none; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg, #1a2230 0 6px, #151c27 6px 12px);
+    border: 1px solid var(--ydg-border);
+  }
+  .ydg-card-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+  .ydg-card-title {
+    font-size: 13.5px; font-weight: 550; color: var(--ydg-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ydg-card-meta {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--ydg-text3);
+    white-space: nowrap;
+  }
+  .ydg-speed { font-family: var(--ydg-mono); font-size: 11.5px; color: var(--ydg-text2); }
+  .ydg-queued, .ydg-done { display: flex; align-items: center; gap: 4px; font-size: 11.5px; }
+  .ydg-done { color: color-mix(in oklab, var(--ydg-accent) 70%, #fff); }
+  .ydg-card-side {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none;
+  }
+
+  /* Variação B — extensão acoplada + linhas densas */
+  .ydg-bar:has(+ .ydg-bar-ext) { border-radius: var(--ydg-radius) var(--ydg-radius) 0 0; }
+  .ydg-bar:has(+ .ydg-bar-ext) .ydg-dl-btn { border-radius: 0 var(--ydg-radius) 0 0; }
+  .ydg-bar-ext {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    background: var(--ydg-bg2);
+    border: 1px solid var(--ydg-border); border-top: none;
+    border-radius: 0 0 var(--ydg-radius) var(--ydg-radius);
+    padding: 9px 14px;
+  }
+  .ydg-chip-rows { display: flex; align-items: center; gap: 20px; }
+  .ydg-chip-group { display: flex; align-items: center; gap: 9px; }
+  .ydg-chip-group-label {
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ydg-text3);
+  }
+  .ydg-chips { display: flex; gap: 4px; }
+  .ydg-chip {
+    padding: 5px 11px; border: none; border-radius: 7px; cursor: pointer;
+    background: transparent; color: var(--ydg-text2);
+    font-family: var(--ydg-sans); font-size: 12.5px; font-weight: 500;
+  }
+  .ydg-chip:hover { background: var(--ydg-panel2); color: var(--ydg-text); }
+  .ydg-chip.is-active { background: var(--ydg-accent); color: #fff; }
+  .ydg-ext-right { display: flex; align-items: center; gap: 9px; }
+  .ydg-ext-label { font-size: 12px; color: var(--ydg-text3); }
+  .ydg-rows {
+    display: flex; flex-direction: column;
+    border: 1px solid var(--ydg-border); border-radius: var(--ydg-radius);
+    background: var(--ydg-panel); overflow: hidden;
+  }
+  .ydg-row {
+    display: grid; align-items: center; gap: 12px;
+    grid-template-columns: 8px minmax(0, 1fr) auto 52px 110px 70px 38px 24px;
+    padding: 11px 14px;
+    border-bottom: 1px solid #1c2533;
+  }
+  .ydg-row:last-child { border-bottom: none; }
+  .ydg-dot {
+    width: 7px; height: 7px; border-radius: 99px;
+    border: 1.5px solid var(--ydg-text3); background: transparent;
+  }
+  .ydg-dot.is-active { background: var(--ydg-accent); border-color: var(--ydg-accent); animation: ydg-pulse 1.4s ease-in-out infinite; }
+  .ydg-dot.is-done { background: var(--ydg-text3); border-color: var(--ydg-text3); }
+  @keyframes ydg-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .ydg-row-title {
+    font-size: 13px; color: var(--ydg-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ydg-row-q { font-size: 12px; color: var(--ydg-text3); font-family: var(--ydg-mono); }
+  .ydg-row-speed { font-family: var(--ydg-mono); font-size: 11px; color: var(--ydg-text3); text-align: right; }
+  .ydg-row .ydg-pct { text-align: right; }
+
+  /* Variação C — painel acoplado + fila mono */
+  .ydg-bar.is-open { border-color: var(--ydg-border2); }
+  .ydg-panel {
+    position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 8px);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px;
+    background: #141b26; border: 1px solid var(--ydg-border2);
+    border-radius: var(--ydg-radius); padding: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+  .ydg-panel-col { display: flex; flex-direction: column; gap: 2px; }
+  .ydg-panel-h {
+    font-family: var(--ydg-mono); font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ydg-text3); padding: 5px 10px 6px;
+  }
+  .ydg-panel-item {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 8px 10px; border: none; border-radius: 7px; cursor: pointer;
+    background: transparent; text-align: left;
+  }
+  .ydg-panel-item:hover { background: #1d2737; }
+  .ydg-panel-item.is-active {
+    background: color-mix(in oklab, var(--ydg-accent) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ydg-accent) 45%, transparent);
+  }
+  .ydg-panel-name { font-family: var(--ydg-mono); font-size: 13px; font-weight: 500; color: var(--ydg-text); }
+  .ydg-panel-item.is-active .ydg-panel-name { color: color-mix(in oklab, var(--ydg-accent) 75%, #fff); }
+  .ydg-panel-desc { font-size: 11.5px; color: var(--ydg-text3); }
+  .ydg-rail {
+    display: flex; align-items: center; gap: 3px; margin-top: 12px;
+    font-family: var(--ydg-mono); font-size: 12px;
+  }
+  .ydg-rail-label {
+    font-family: var(--ydg-sans); font-size: 12px; color: var(--ydg-text3); margin-right: 9px;
+  }
+  .ydg-rail-opt {
+    padding: 5px 10px; border: none; border-radius: 6px; cursor: pointer;
+    background: transparent; color: var(--ydg-text3);
+    font-family: var(--ydg-mono); font-size: 12px;
+  }
+  .ydg-rail-opt:hover { color: var(--ydg-text2); background: var(--ydg-panel); }
+  .ydg-rail-opt.is-active {
+    background: color-mix(in oklab, var(--ydg-accent) 16%, transparent);
+    color: color-mix(in oklab, var(--ydg-accent) 78%, #fff);
+  }
+  .ydg-mrows { display: flex; flex-direction: column; }
+  .ydg-mrow { padding: 11px 2px 13px; border-bottom: 1px solid #1a2230; }
+  .ydg-mrow:last-child { border-bottom: none; }
+  .ydg-mrow-top {
+    display: grid; align-items: center; gap: 12px;
+    grid-template-columns: 44px minmax(0, 1fr) auto 44px 24px;
+    margin-bottom: 9px;
+  }
+  .ydg-mrow-fmt {
+    font-family: var(--ydg-mono); font-size: 11px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: color-mix(in oklab, var(--ydg-accent) 75%, #fff);
+  }
+  .ydg-mrow-title {
+    font-size: 13px; color: var(--ydg-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ydg-mrow-status { font-family: var(--ydg-mono); font-size: 11px; color: var(--ydg-text3); }
+  .ydg-mrow-pct { font-family: var(--ydg-mono); font-size: 12px; color: var(--ydg-text2); text-align: right; }
+  .ydg-prog-thin { height: 3px; }
+
+html, body, #root {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  background: #0d1117;
+}
+* { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script type="text/babel">
+// ===== app-shared.jsx =====
+// ============================================================
+// yt-dlp-GUI — base compartilhada entre as variações
+// Janela desktop, ícones, dados de formato/qualidade e a
+// simulação da fila de downloads.
+// ============================================================
+
+const YDG_FORMAT_GROUPS = [
+{
+  label: 'Vídeo',
+  items: [
+  { id: 'mp4', name: 'MP4', desc: 'H.264 + AAC', kind: 'video' },
+  { id: 'webm', name: 'WebM', desc: 'VP9 + Opus', kind: 'video' },
+  { id: 'mkv', name: 'MKV', desc: 'melhor stream', kind: 'video' }]
+
+},
+{
+  label: 'Áudio',
+  items: [
+  { id: 'm4a', name: 'M4A', desc: 'AAC original', kind: 'audio' },
+  { id: 'mp3', name: 'MP3', desc: 'convertido', kind: 'audio' },
+  { id: 'opus', name: 'Opus', desc: 'sem conversão', kind: 'audio' },
+  { id: 'wav', name: 'WAV', desc: 'sem compressão', kind: 'audio' }]
+
+}];
+
+
+const YDG_ALL_FORMATS = YDG_FORMAT_GROUPS.flatMap(function (g) {return g.items;});
+
+function ydgFormat(id) {
+  return YDG_ALL_FORMATS.find(function (f) {return f.id === id;}) || YDG_ALL_FORMATS[0];
+}
+
+const YDG_VIDEO_QUALITIES = ['Melhor', '2160p', '1440p', '1080p', '720p', '480p'];
+const YDG_AUDIO_QUALITIES = ['Melhor', '320 kbps', '256 kbps', '192 kbps', '128 kbps'];
+
+function ydgQualities(formatId) {
+  return ydgFormat(formatId).kind === 'audio' ? YDG_AUDIO_QUALITIES : YDG_VIDEO_QUALITIES;
+}
+
+const YDG_FAKE_VIDEOS = [
+{ title: 'Como compilar o yt-dlp do zero — guia completo', channel: 'Terminal Brasil', duration: '18:42', size: '312 MB' },
+{ title: 'Mix de 1 hora para programar sem interrupções', channel: 'Beats de Estúdio', duration: '1:02:11', size: '89 MB' },
+{ title: 'Os 5 melhores teclados mecânicos de 2026', channel: 'Bancada Tech', duration: '14:05', size: '248 MB' },
+{ title: 'A história do formato MP4 — documentário', channel: 'Arquivo Aberto', duration: '42:30', size: '1.1 GB' },
+{ title: 'Engenharia de codecs — entrevista completa', channel: 'Conversa Técnica', duration: '55:18', size: '940 MB' },
+{ title: 'Ray tracing explicado em 12 minutos', channel: 'Pixel a Pixel', duration: '12:08', size: '201 MB' }];
+
+
+function ydgIsValidUrl(v) {
+  return /(youtube\.com|youtu\.be)\//i.test(v.trim());
+}
+
+// ---------- Ícones (traço simples, 1.5px) ----------
+function YdgIcon({ name, size = 16, stroke = 1.5, style }) {
+  const paths = {
+    download: <g><path d="M8 2.5v7.5" /><path d="M4.5 7L8 10.5L11.5 7" /><path d="M2.5 12.5h11" /></g>,
+    chevron: <path d="M4 6l4 4 4-4" />,
+    link: <g><path d="M6.5 9.5l3-3" /><path d="M7.5 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1" /><path d="M8.5 11.5l-1 1A2.5 2.5 0 014 9l1-1" /></g>,
+    check: <path d="M3 8.5L6.5 12L13 4.5" />,
+    x: <g><path d="M4 4l8 8" /><path d="M12 4l-8 8" /></g>,
+    clock: <g><circle cx="8" cy="8" r="5.5" /><path d="M8 5.5V8l2 1.5" /></g>,
+    pause: <g><path d="M6 4.5v7" /><path d="M10 4.5v7" /></g>,
+    folder: <path d="M2.5 4.5a1 1 0 011-1h3l1.5 2h4.5a1 1 0 011 1v5a1 1 0 01-1 1h-9a1 1 0 01-1-1v-7z" />,
+    play: <path d="M5.5 4l6 4-6 4V4z" />
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor"
+    strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden="true">
+      {paths[name]}
+    </svg>);
+
+}
+
+// ---------- Moldura de janela desktop ----------
+function YdgWindow({ label, children, height }) {
+  return (
+    <div className="ydg-win" data-screen-label={label} style={{ height: height }}>
+      <div className="ydg-tbar">
+        <div className="ydg-tbar-left" data-tauri-drag-region>
+          <div className="ydg-mark"><YdgIcon name="download" size={11} stroke={2} /></div>
+          <span className="ydg-tbar-title" style={{ fontFamily: "-apple-system", fontSize: "15px" }}>yt-dlp-GUI</span>
+          <span className="ydg-tbar-ver">v2.1.0</span>
+        </div>
+        <div className="ydg-tbar-btns">
+          <button className="ydg-tbtn" data-window-btn="minimize" aria-label="Minimizar"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5h8" stroke="currentColor" strokeWidth="1.2" /></svg></button>
+          <button className="ydg-tbtn" data-window-btn="maximize" aria-label="Maximizar"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.2" /></svg></button>
+          <button className="ydg-tbtn ydg-tbtn-close" data-window-btn="close" aria-label="Fechar"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.2" /></svg></button>
+        </div>
+      </div>
+      <div className="ydg-body">{children}</div>
+    </div>);
+
+}
+
+// ─────────────────────────────────────────────
+// FILA REAL — conectada ao backend FastAPI
+// ─────────────────────────────────────────────
+const API = 'http://127.0.0.1:17432';
+
+function useYdgQueue() {
+  const [items, setItems] = React.useState([]);
+
+  // SSE — escuta progresso em tempo real
+  React.useEffect(function () {
+    const es = new EventSource(API + '/api/queue/stream');
+    es.onmessage = function (e) {
+      try {
+        const data = JSON.parse(e.data);
+        console.log('SSE queue update:', data);
+        setItems(Array.isArray(data) ? data.slice() : []);
+      } catch (err) {
+        console.error('Erro SSE:', err, e.data);
+      }
+  };
+  es.onerror = function (err) {
+    console.error('SSE error:', err);
+  };
+  return function () { es.close(); };
+}, []);
+
+  // Envia download para o backend
+  const add = React.useCallback(async function (url, formatId, quality, outputDir) {
+    try {
+      await fetch(API + '/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, format: formatId, quality, output_dir: outputDir })
+      });
+    } catch(err) {
+      console.error('Erro ao enfileirar download:', err);
+    }
+  }, []);
+
+  // Remove item da fila
+  const remove = React.useCallback(async function (id) {
+    try {
+      await fetch(API + '/api/queue/' + id, { method: 'DELETE' });
+    } catch(_) {}
+    setItems(function (prev) { return prev.filter(function (i) { return i.id !== id; }); });
+  }, []);
+
+  return { items: items, add: add, remove: remove };
+}
+
+// ---------- Barra de entrada: url + validação + busca título ----------
+function useYdgInput(onSubmit) {
+  const [url, setUrl] = React.useState('');
+  const [error, setError] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+
+  const submit = async function () {
+  // Lê o valor atual direto do DOM — evita stale closure
+  const currentUrl = document.querySelector('.ydg-input').value;
+  if (!ydgIsValidUrl(currentUrl)) {
+    setError(true);
+    setTimeout(function () { setError(false); }, 600);
+    return;
+  }
+  setLoading(true);
+  try {
+    await onSubmit(currentUrl);
+    setUrl('');
+  } finally {
+    setLoading(false);
+  }
+};
+
+  return {
+    url: url,
+    error: error,
+    loading: loading,
+    onChange: function (e) {
+      setUrl(e.target.value); setError(false); console.log('onChange:', e.target.value);
+    },
+    onKeyDown: function (e) { if (e.key === 'Enter') submit(); },
+    submit: submit
+  };
+}
+
+// Fecha menus ao clicar fora
+function useYdgClickOutside(ref, onClose) {
+  React.useEffect(function () {
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    }
+    document.addEventListener('mousedown', handler);
+    return function () {document.removeEventListener('mousedown', handler);};
+  }, [onClose]);
+}
+
+Object.assign(window, {
+  YDG_FORMAT_GROUPS, YDG_ALL_FORMATS, YDG_VIDEO_QUALITIES, YDG_AUDIO_QUALITIES,
+  ydgFormat, ydgQualities, ydgIsValidUrl,
+  YdgIcon, YdgWindow,
+  useYdgQueue, useYdgInput, useYdgClickOutside
+});
+
+// ===== variation-1.jsx =====
+// ============================================================
+// Variação A — "Barra integrada"
+// Formato acoplado dentro da própria barra; Download anexado
+// na extremidade. Qualidade num seletor separado abaixo.
+// Fila em cartões com miniatura.
+// ============================================================
+
+function YdgFormatMenuA({ open, current, onPick, onClose, anchorRef }) {
+  useYdgClickOutside(anchorRef, onClose);
+  if (!open) return null;
+  return (
+    <div className="ydg-menu" style={{ right: 0, top: 'calc(100% + 6px)', width: 232 }}>
+      {YDG_FORMAT_GROUPS.map(function (group) {
+        return (
+          <div key={group.label}>
+            <div className="ydg-menu-h">{group.label}</div>
+            {group.items.map(function (f) {
+              const active = f.id === current;
+              return (
+                <button key={f.id} className={'ydg-menu-item' + (active ? ' is-active' : '')}
+                onClick={function () {onPick(f.id);onClose();}}>
+                  <span className="ydg-menu-name">{f.name}</span>
+                  <span className="ydg-menu-desc">{f.desc}</span>
+                  {active ? <YdgIcon name="check" size={13} style={{ color: 'var(--ydg-accent)' }} /> : null}
+                </button>);
+
+            })}
+          </div>);
+
+      })}
+    </div>);
+
+}
+
+function YdgQualityPillA({ formatId, quality, setQuality }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  useYdgClickOutside(ref, function () {setOpen(false);});
+  const opts = ydgQualities(formatId);
+  return (
+    <div className="ydg-rel" ref={ref}>
+      <button className="ydg-pill" onClick={function () {setOpen(!open);}}>
+        <span className="ydg-pill-label">Qualidade</span>
+        <span className="ydg-pill-value">{quality}</span>
+        <YdgIcon name="chevron" size={12} style={{ color: 'var(--ydg-text3)' }} />
+      </button>
+      {open ?
+      <div className="ydg-menu" style={{ left: 0, top: 'calc(100% + 6px)', width: 160 }}>
+          {opts.map(function (q) {
+          return (
+            <button key={q} className={'ydg-menu-item' + (q === quality ? ' is-active' : '')}
+            onClick={function () {setQuality(q);setOpen(false);}}>
+                <span className="ydg-menu-name" style={{ fontWeight: 450 }}>{q}</span>
+                {q === quality ? <YdgIcon name="check" size={13} style={{ color: 'var(--ydg-accent)' }} /> : null}
+              </button>);
+
+        })}
+        </div> :
+      null}
+    </div>);
+
+}
+
+function YdgQueueCardA({ item, onRemove }) {
+  const f = ydgFormat(item.formatId);
+  // thumbnail do YouTube via ID do vídeo (se disponível)
+  const thumbUrl = item.video_id
+    ? 'https://img.youtube.com/vi/' + item.video_id + '/mqdefault.jpg'
+    : null;
+  return (
+    <div className="ydg-card">
+      <div className="ydg-thumb" style={thumbUrl ? { backgroundImage: 'url(' + thumbUrl + ')', backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
+        {!thumbUrl && <YdgIcon name={f.kind === 'audio' ? 'pause' : 'play'} size={14} style={{ color: 'var(--ydg-text3)', opacity: 0.9 }} />}
+      </div>
+      <div className="ydg-card-mid">
+        <div className="ydg-card-title">{item.title || item.url}</div>
+        <div className="ydg-card-meta">
+          <span className="ydg-badge">{f.name}</span>
+          <span>{item.quality}</span>
+          {item.duration ? <React.Fragment><span>·</span><span>{item.duration}</span></React.Fragment> : null}
+          {item.size ? <React.Fragment><span>·</span><span>{item.size}</span></React.Fragment> : null}
+          {item.status === 'downloading' && item.speed ? <span className="ydg-speed">{item.speed}</span> : null}
+          {item.status === 'queued' ? <span className="ydg-queued"><YdgIcon name="clock" size={11} /> na fila</span> : null}
+          {item.status === 'done' ? <span className="ydg-done"><YdgIcon name="check" size={11} /> concluído</span> : null}
+          {item.status === 'error' ? <span className="ydg-queued" style={{color:'var(--ydg-red,#e05c5c)'}}>erro</span> : null}
+        </div>
+        <div className="ydg-prog">
+          <div className={'ydg-prog-fill' + (item.status === 'done' ? ' is-done' : '')}
+          style={{ width: (item.progress || 0) + '%' }}></div>
+        </div>
+      </div>
+      <div className="ydg-card-side">
+        <span className="ydg-pct">{Math.floor(item.progress || 0)}%</span>
+        <button className="ydg-icon-btn" title="Remover" onClick={function () {onRemove(item.id);}}>
+          <YdgIcon name="x" size={12} />
+        </button>
+      </div>
+    </div>);
+
+}
+
+
+function YdgVariationA() {
+  const [formatId, setFormatId] = React.useState('mp4');
+  const [quality, setQuality] = React.useState('1080p');
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const queue = useYdgQueue();
+  const [outputDir, setOutputDir] = React.useState('');
+  React.useEffect(function () {
+    try {
+      window.__TAURI_INTERNALS__.invoke('get_downloads_dir')
+        .then(function(d) { setOutputDir(d); })
+        .catch(function() {});
+    } catch(_) {}
+  }, []);
+  const input = useYdgInput(async function (url) {
+    await queue.add(url, formatId, quality, outputDir);
+  });
+  const fmtRef = React.useRef(null);
+
+  function pickFormat(id) {
+    setFormatId(id);
+    setQuality(ydgQualities(id)[ydgFormat(id).kind === 'audio' ? 0 : 3] || 'Melhor');
+  }
+
+  return (
+    <YdgWindow label="A — Barra integrada" height="100%">
+      <div className="ydg-center" style={{ paddingTop: 48, margin: "40px 89px 0px" }}>
+        <div className={'ydg-bar' + (input.error ? ' is-error' : '')}>
+          <span className="ydg-bar-icon"><YdgIcon name="link" size={15} /></span>
+          <input className="ydg-input" type="text" value={input.url}
+          placeholder="Cole o link do YouTube aqui…"
+          onChange={input.onChange} onKeyDown={input.onKeyDown} spellCheck="false" />
+          <div className="ydg-rel" ref={fmtRef} style={{ alignSelf: 'stretch', display: 'flex' }}>
+            <button className="ydg-fmt-trigger" onClick={function () {setMenuOpen(!menuOpen);}}>
+              <span>{ydgFormat(formatId).name}</span>
+              <YdgIcon name="chevron" size={12} style={{ color: 'var(--ydg-text3)' }} />
+            </button>
+            <YdgFormatMenuA open={menuOpen} current={formatId} onPick={pickFormat}
+            onClose={function () {setMenuOpen(false);}} anchorRef={fmtRef} />
+          </div>
+          <button className="ydg-dl-btn" onClick={input.submit}>
+            <YdgIcon name="download" size={15} stroke={1.8} />
+            <span>Download</span>
+          </button>
+        </div>
+
+        <div className="ydg-under-bar">
+          <YdgQualityPillA formatId={formatId} quality={quality} setQuality={setQuality} />
+          <div className="ydg-dest">
+            <YdgIcon name="folder" size={13} />
+            <span>~/Downloads</span>
+          </div>
+        </div>
+
+        {queue.items.length > 0 && (
+          <div className="ydg-queue">
+            <div className="ydg-queue-h">
+              <span>Downloads</span>
+              <span className="ydg-queue-count">{queue.items.length}</span>
+            </div>
+            <div className="ydg-cards">
+              {queue.items.map(function (item) {
+                return <YdgQueueCardA key={item.id} item={item} onRemove={queue.remove} />;
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </YdgWindow>);
+
+}
+
+window.YdgVariationA = YdgVariationA;
+
+// ===== render =====
+function App() {
+  return React.createElement(YdgVariationA, null);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
+
+// ── Controles de janela Tauri ──
+function setupWindowControls() {
+  document.querySelectorAll('[data-window-btn]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.windowBtn;
+      try {
+        if (window.__TAURI_INTERNALS__) {
+          // Tauri v2
+          const { invoke } = window.__TAURI_INTERNALS__;
+          if (action === 'minimize') await invoke('plugin:window|minimize', { label: 'main' });
+          if (action === 'maximize') await invoke('plugin:window|toggle_maximize', { label: 'main' });
+          if (action === 'close')    await invoke('plugin:window|close', { label: 'main' });
+        } else if (window.__TAURI__ && window.__TAURI__.window) {
+          // Tauri v1 fallback
+          const appWindow = window.__TAURI__.window.getCurrentWindow();
+          if (action === 'minimize') await appWindow.minimize();
+          if (action === 'maximize') await appWindow.toggleMaximize();
+          if (action === 'close')    await appWindow.close();
+        }
+      } catch(err) {
+        console.warn('Tauri window control error:', err);
+      }
+    });
+  });
+}
+// Aguarda DOM completo antes de anexar listeners
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupWindowControls);
+} else {
+  // DOM já pronto — React pode ainda não ter renderizado, espera um tick
+  setTimeout(setupWindowControls, 500);
+}
+</script>
+</body>
+</html>
