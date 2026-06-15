@@ -4,6 +4,12 @@ use std::process::{Child, Command};
 use std::sync::Mutex;
 use tauri::{Manager, State};
 
+// CREATE_NO_WINDOW só existe no Windows
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 struct BackendProcess(Mutex<Option<Child>>);
 
 #[tauri::command]
@@ -24,36 +30,40 @@ fn open_folder(path: String) {
     Command::new("xdg-open").arg(&path).spawn().ok();
 }
 
-fn start_backend(_app_handle: &tauri::AppHandle) -> std::io::Result<Child> {
-    // Em DEV: roda o script Python diretamente
+fn start_backend(app_handle: &tauri::AppHandle) -> std::io::Result<Child> {
     #[cfg(debug_assertions)]
     {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let backend_script = std::path::Path::new(manifest_dir)
-            .parent().unwrap()  // sai de src-tauri/
+            .parent().unwrap()
             .join("backend")
             .join("main.py");
 
-        return Command::new("python3")
-            .arg(backend_script)
-            .spawn();
+        let mut cmd = Command::new("python");
+        cmd.arg(backend_script);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        return cmd.spawn();
     }
 
-    // Em PRODUÇÃO: usa o executável PyInstaller empacotado
     #[cfg(not(debug_assertions))]
     {
-        let resource_dir = app_handle
-            .path()
-            .resource_dir()
-            .expect("Não foi possível obter resource_dir");
+        let exe_dir = std::env::current_exe()
+            .expect("Não foi possível obter o caminho do executável")
+            .parent()
+            .expect("Não foi possível obter o diretório do executável")
+            .to_path_buf();
 
-        let backend_exe = resource_dir.join("backend").join(if cfg!(windows) {
+        let backend_exe = exe_dir.join(if cfg!(windows) {
             "yt-dlp-backend.exe"
         } else {
             "yt-dlp-backend"
         });
 
-        Command::new(backend_exe).spawn()
+        let mut cmd = Command::new(&backend_exe);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.spawn()
     }
 }
 
@@ -65,7 +75,6 @@ fn main() {
                 Ok(child) => {
                     let state: State<BackendProcess> = app.state();
                     *state.0.lock().unwrap() = Some(child);
-                    println!("Backend Python iniciado.");
                 }
                 Err(e) => {
                     eprintln!("Erro ao iniciar backend: {e}");
@@ -76,8 +85,7 @@ fn main() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 let state: State<BackendProcess> = window.state();
-                let mut child = state.0.lock().unwrap().take();
-                if let Some(ref mut c) = child {
+                if let Some(ref mut c) = state.0.lock().unwrap().take() {
                     c.kill().ok();
                 };
             }
