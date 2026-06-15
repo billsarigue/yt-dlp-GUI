@@ -83,11 +83,21 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
                 let state: State<BackendProcess> = window.state();
-                if let Some(ref mut c) = state.0.lock().unwrap().take() {
+                let mut child = state.0.lock().unwrap().take();
+                if let Some(ref mut c) = child {
+                    let pid = c.id();
+                    // /F = force, /T = mata toda a árvore de filhos (ffmpeg, yt-dlp, etc.)
+                    std::process::Command::new("taskkill")
+                        .args(["/F", "/T", "/PID", &pid.to_string()])
+                        .creation_flags(0x08000000)
+                        .spawn()
+                        .ok();
                     c.kill().ok();
-                };
+                    let _ = c.wait();
+                }
+                std::process::exit(0);
             }
         })
         .invoke_handler(tauri::generate_handler![

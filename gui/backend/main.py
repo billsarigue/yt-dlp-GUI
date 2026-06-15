@@ -13,6 +13,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+# Windows Job Object: garante que todos os subprocessos morrem com o backend
+if sys.platform == "win32":
+    import ctypes
+    import ctypes.wintypes
+
+    _kernel32 = ctypes.windll.kernel32
+
+    def _assign_job_object():
+        job = _kernel32.CreateJobObjectW(None, None)
+        if not job:
+            return
+        # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+        info = (ctypes.c_uint32 * 8)()
+        info[4] = 0x2000  # LimitFlags
+        _kernel32.SetInformationJobObject(job, 9, info, ctypes.sizeof(info))
+        _kernel32.AssignProcessToJobObject(job, _kernel32.GetCurrentProcess())
+
+    _assign_job_object()
+
 
 # Redireciona stdout/stderr para arquivo de log quando rodando como executável
 # (PyInstaller com --noconsole seta sys.stdout = None)
@@ -22,7 +41,6 @@ if getattr(sys, "frozen", False) and sys.stdout is None:
     log_file = open(log_path, "w", encoding="utf-8", buffering=1)
     sys.stdout = log_file
     sys.stderr = log_file
-
 
 app = FastAPI()
 app.add_middleware(
@@ -36,21 +54,23 @@ queue: list[dict] = []
 queue_lock = asyncio.Lock()
 sse_subscribers: list[asyncio.Queue] = []
 
-# Suprime janela do cmd no Windows em todos os subprocessos
+# CREATE_NO_WINDOW garante que subprocessos (yt-dlp, ffmpeg) não abram janela
+# e permaneçam no mesmo process group — morrem junto com o backend
 if sys.platform == "win32":
     _si = subprocess.STARTUPINFO()
     _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     _si.wShowWindow = subprocess.SW_HIDE
-    WIN_FLAGS = {"startupinfo": _si}
+    WIN_FLAGS = {
+        "startupinfo": _si,
+        "creationflags": 0x08000000,  # CREATE_NO_WINDOW (sem CREATE_NEW_PROCESS_GROUP)
+    }
 else:
     WIN_FLAGS = {}
-
 
 async def broadcast():
     data = "data: " + json.dumps(queue) + "\n\n"
     for q in sse_subscribers:
         await q.put(data)
-
 
 class DownloadRequest(BaseModel):
     url: str
@@ -58,10 +78,8 @@ class DownloadRequest(BaseModel):
     quality: str = "1080p"
     output_dir: str = ""
 
-
 def find_ytdlp() -> str:
     if getattr(sys, "frozen", False):
-        # Produção: PyInstaller bundle
         exe_dir = Path(sys.executable).parent
         candidates = [
             exe_dir / "yt-dlp.exe",
@@ -70,12 +88,11 @@ def find_ytdlp() -> str:
             exe_dir / "resources" / "backend" / "yt-dlp.exe",
         ]
     else:
-        # Dev: procura relativo à raiz do projeto
         project_root = Path(__file__).parent
         candidates = [
             project_root / "resources" / "backend" / "yt-dlp.exe",
             project_root / "resources" / "backend" / "yt-dlp",
-            Path(shutil.which("yt-dlp") or ""),  # fallback dev: usa o do sistema
+            Path(shutil.which("yt-dlp") or ""),
         ]
 
     for candidate in candidates:
@@ -83,7 +100,6 @@ def find_ytdlp() -> str:
             return str(candidate)
 
     raise FileNotFoundError("yt-dlp não encontrado")
-
 
 @app.get("/api/queue/stream")
 async def queue_stream():
@@ -105,11 +121,9 @@ async def queue_stream():
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-
 def extract_video_id(url: str) -> str:
     m = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
     return m.group(1) if m else ""
-
 
 def build_format_arg(fmt: str, quality: str) -> str:
     audio_fmts = {"m4a", "mp3", "opus", "wav"}
@@ -120,11 +134,9 @@ def build_format_arg(fmt: str, quality: str) -> str:
     q = quality.replace("p", "")
     return f"bestvideo[ext=mp4][height<={q}]+bestaudio[ext=m4a]/bestvideo[height<={q}]+bestaudio/best"
 
-
 def build_output_template(output_dir: str) -> str:
     base = output_dir if output_dir else str(Path.home() / "Downloads")
     return os.path.join(base, "%(title)s.%(ext)s")
-
 
 @app.post("/api/download")
 async def start_download(req: DownloadRequest):
@@ -151,7 +163,6 @@ async def start_download(req: DownloadRequest):
         lambda t: print("TASK ERROR:", t.exception()) if t.exception() else None
     )
     return {"id": item_id}
-
 
 async def run_download(item_id: str, req: DownloadRequest):
     pct = 0.0
@@ -240,7 +251,6 @@ async def run_download(item_id: str, req: DownloadRequest):
                 item["status"] = "error"
                 await broadcast()
 
-
 @app.delete("/api/queue/{item_id}")
 async def remove_item(item_id: str):
     async with queue_lock:
@@ -248,7 +258,6 @@ async def remove_item(item_id: str):
         queue = [i for i in queue if i["id"] != item_id]
         await broadcast()
     return {"ok": True}
-
 
 @app.get("/api/debug")
 async def debug():
@@ -261,7 +270,6 @@ async def debug():
         "cwd": os.getcwd(),
         "exe_dir": str(Path(sys.executable).parent),
     }
-
 
 if __name__ == "__main__":
     import uvicorn
@@ -282,6 +290,6 @@ if __name__ == "__main__":
         app,
         host="127.0.0.1",
         port=port,
-        log_config=None,   # ← desativa o logging do uvicorn que causa o crash
+        log_config=None,
         access_log=False,
     )
