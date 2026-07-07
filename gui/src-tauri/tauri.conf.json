@@ -29,7 +29,7 @@
   
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["deb", "rpm", "appimage"],
     "externalBin": ["resources/backend/yt-dlp-backend"],
     "resources": ["resources/backend/yt-dlp.exe"],
     "publisher": "ZionLux",
